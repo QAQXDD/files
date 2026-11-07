@@ -489,8 +489,23 @@ function update(t){
 /* ---------------- output ---------------- */
 const outc=document.getElementById('out');const og=outc.getContext('2d');
 window.renderFrame=function(f){const t=f/FPS;update(t);composer.render();og.drawImage(glc,0,0);drawCaptions(og,t);return true;};
-window.renderAt=(t)=>window.renderFrame(Math.round(t*FPS));
-window.grab=(f,type='image/png',q)=>{window.renderFrame(f);return outc.toDataURL(type,q);};
+window.renderAt=(t)=>{window.__MANUAL=true;return window.renderFrame(Math.round(t*FPS));};
+window.grab=(f,type='image/png',q)=>{window.__MANUAL=true;window.renderFrame(f);return outc.toDataURL(type,q);};
 window.prof=(f)=>{const a=performance.now();update(f/FPS);const b=performance.now();composer.render();renderer.getContext().finish();const c=performance.now();og.drawImage(glc,0,0);drawCaptions(og,f/FPS);const d=performance.now();const u=outc.toDataURL('image/png');const e=performance.now();return [b-a,c-b,d-c,e-d,u.length];};
 window.DBG=(o)=>{if('amt' in o)finish.uniforms.uAmt.value=o.amt;};
 window.READY=true;
+
+/* ---------------- auto-play driver (interactive check page) ---------------- */
+// The engine is a frame server: nothing plays until something drives frames.
+// This loop plays the 60 s short in real time, looping, for browser viewing.
+// It stops permanently once frames are driven manually (grab/renderAt),
+// so the MP4 render pipeline (which calls grab per frame) is unaffected.
+window.__MANUAL=false;
+const __t0=performance.now();
+function __tick(now){
+  if(window.__MANUAL)return;
+  const t=((now-__t0)/1000)%DUR;
+  window.renderFrame(Math.round(t*FPS));
+  requestAnimationFrame(__tick);
+}
+requestAnimationFrame(__tick);
