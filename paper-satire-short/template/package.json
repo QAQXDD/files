@@ -1,0 +1,16 @@
+{
+  "name": "paper-satire-short-template",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Paper-craft no-dialogue satire short: three.js scene -> single offline HTML with built-in MP4 export",
+  "scripts": {
+    "build": "python3 build.py"
+  },
+  "dependencies": {
+    "three": "0.170.0",
+    "mp4-muxer": "5.2.2"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0"
+  }
+}

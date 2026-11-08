@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="__LANG__"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="export-name" content="__SLUG__">
+<title>__TITLE__</title>
+<style>
+@font-face{font-family:"DFTitle";src:url(data:font/woff2;base64,__FONT__) format("woff2");font-weight:400;}
+html,body{margin:0;height:100%;background:__BG__;overflow:hidden;touch-action:manipulation}
+body{display:flex;align-items:center;justify-content:center}
+#gl{display:block;background:#2c2622}
+#tap{position:fixed;inset:0;display:flex;align-items:flex-end;padding-bottom:22vh;box-sizing:border-box;justify-content:center;cursor:pointer;background:rgba(20,16,12,.25);-webkit-tap-highlight-color:transparent}
+#tap span{width:96px;height:96px;border-radius:50%;background:#f4ecd8;border:5px solid #2b2520;display:flex;align-items:center;justify-content:center;font:900 44px/1 sans-serif;color:#2b2520;box-shadow:0 6px 0 #2b2520}
+#tap span.p{padding-left:8px}
+</style></head><body>
+<canvas id="gl" width="1080" height="1920"></canvas>
+<div id="tap"><span class="p"><svg width="44" height="44" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="#2b2520"/></svg></span></div>
+<script>window.__AUDIO="data:audio/mpeg;base64,__AUDIO__";</script>
+<script>__JS__</script>
+</body></html>

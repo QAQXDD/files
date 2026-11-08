@@ -1,0 +1,11 @@
+node_modules/
+__pycache__/
+dist.js
+out/
+stills/
+fast/
+covers/
+fonts/src/
+play_*.png
+sheet_*.jpg
+sfx/*.wav
