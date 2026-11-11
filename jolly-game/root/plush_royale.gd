@@ -56,6 +56,13 @@ const ROOM_H := 2.7
 const PLANE_FILES := ["res://toy_plane.glb", "res://玩具飞机.glb"]
 const GUN_FILES := ["res://foam_gun.glb", "res://软弹枪.glb"]
 const GUN_LEN := {"pistol": 0.14, "smg": 0.2, "shotgun": 0.22}   # 真实长度（米）
+# 每种枪自己的模型；没有的（散弹）用软弹枪模型缩放
+const GUN_MODEL_FILES := {"pistol": ["res://pistol.glb", "res://道具手枪.glb"], "smg": ["res://smg.glb", "res://道具冲锋枪.glb"]}
+const BANDAID_FILES := ["res://bandaid.glb", "res://道具创可贴.glb"]
+const CHUTE_FILES := ["res://tissue_chute.glb", "res://道具纸巾伞.glb"]
+const BLOCK_FILES := [["res://block_cube06.glb", "res://积木方块06.glb"], ["res://block_cube10.glb", "res://积木方块10.glb"],
+	["res://block_cube16.glb", "res://积木方块16.glb"], ["res://block_tri.glb", "res://积木三角.glb"],
+	["res://block_plank.glb", "res://积木长条.glb"], ["res://block_arch.glb", "res://积木拱门.glb"], ["res://block_cyl.glb", "res://积木圆柱.glb"]]
 const ROOM_SHELL_FILES := ["res://room_shell.glb", "res://房间.glb"]
 # 毒圈：每一圈的半径、等待时间、收缩时间、圈外每秒掉血
 const ZONE_R := [6.5, 4.0, 2.3, 1.1, 0.3]
@@ -171,12 +178,13 @@ class Fighter extends CharacterBody3D:
 		weapon_id = id
 		mag = WEAPONS[id].mag
 		reload_t = 0.0
-		if gun_mesh and game.gun_src_mesh:
+		var gmod: Variant = game.gun_model(id)
+		if gun_mesh and gmod != null:
 			gun_mesh.visible = true
-			gun_mesh.mesh = game.gun_src_mesh
+			gun_mesh.mesh = gmod[0]
 			gun_mesh.material_override = null
-			var k: float = GUN_LEN[id] / game.char_scale / game.gun_src_len
-			gun_mesh.transform = Transform3D(game.gun_src_basis.scaled(Vector3.ONE * k), Vector3(-0.3, 0.3, 0.12))
+			var k: float = GUN_LEN[id] / game.char_scale / gmod[2]
+			gun_mesh.transform = Transform3D(gmod[1].scaled(Vector3.ONE * k), Vector3(-0.3, 0.3, 0.12))
 		elif gun_mesh:
 			gun_mesh.visible = true
 			var m := StandardMaterial3D.new()
@@ -451,6 +459,7 @@ var plane: Node3D
 var gun_src_mesh: Mesh = null        # 你建的软弹枪模型（枪口 +Z，握把底在原点）
 var gun_src_basis := Basis.IDENTITY
 var gun_src_len := 1.0
+var gun_models := {}                   # id -> [mesh, basis, len]
 var plane_from := Vector3.ZERO
 var plane_to := Vector3.ZERO
 var plane_t := 0.0
@@ -559,11 +568,45 @@ func _box(parent: Node3D, center: Vector3, size: Vector3, color: Color, collide 
 		mi.transform = Transform3D(basis, center)
 		parent.add_child(mi)
 
-func _ramp(parent: Node3D, a: Vector3, b: Vector3, width: float, color: Color) -> void:
-	# 斜靠的书/尺子/砧板，让小队员能爬上家具
+# 只要模型外观：去掉 -colonly 生成的碰撞体（物资、伞、坡道外观用）
+func _visual_model(files: Array) -> Node3D:
+	for f in files:
+		if ResourceLoader.exists(f):
+			var inst: Node3D = load(f).instantiate()
+			_strip_bodies(inst)
+			return inst
+	return null
+
+func _strip_bodies(n: Node) -> void:
+	for c in n.get_children():
+		if c is CollisionObject3D:
+			c.free()
+		else:
+			_strip_bodies(c)
+
+func _ramp(parent: Node3D, a: Vector3, b: Vector3, width: float, color: Color, files: Array = []) -> void:
+	# 斜靠的书/尺子/砧板，让小队员能爬上家具。有你建的坡道模型就拉伸贴上去，碰撞仍用盒子
 	var d := b - a
 	var basis := Basis.looking_at(d.normalized(), Vector3.UP)
-	_box(parent, (a + b) / 2 + basis.y * 0.01, Vector3(width, 0.02, d.length()), color, true, basis)
+	var center := (a + b) / 2 + basis.y * 0.01
+	var vis := _visual_model(files)
+	if vis == null:
+		_box(parent, center, Vector3(width, 0.02, d.length()), color, true, basis)
+		return
+	var sb := StaticBody3D.new()
+	sb.transform = Transform3D(basis, center)
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = Vector3(width, 0.02, d.length())
+	cs.shape = sh
+	sb.add_child(cs)
+	parent.add_child(sb)
+	var mi := _find_mesh(vis)
+	var aabb := mi.get_aabb() if mi else AABB(Vector3(-0.1, 0, -0.5), Vector3(0.2, 0.02, 1.0))
+	var k := Vector3(width / max(aabb.size.x, 0.001), 1.0, d.length() / max(aabb.size.z, 0.001))
+	var c := aabb.get_center()
+	vis.transform = Transform3D(basis * Basis.from_scale(k), center - basis.y * 0.01 - basis * (Vector3(c.x * k.x, 0, c.z * k.z)))
+	parent.add_child(vis)
 
 func _legs(parent: Node3D, cx: float, cz: float, w: float, d: float, h: float, t: float, color: Color) -> void:
 	for sx in [-1, 1]:
@@ -606,7 +649,8 @@ func _build_room(root: Node3D) -> void:
 		_box(root, Vector3(1, 2.4, 0), Vector3(0.1, 0.6, 1.6), wall)
 		_box(root, Vector3(-2, 1.5, -ROOM_Z + 0.01), Vector3(2.4, 1.2, 0.02), Color(0.75, 0.88, 1.0), false)  # 窗
 	# 客厅
-	_box(root, Vector3(-2, 0.005, -0.3), Vector3(3.2, 0.01, 2.2), Color(0.75, 0.32, 0.3))          # 地毯
+	if not _place_model(root, ["res://rug.glb", "res://地毯.glb"], Vector3(-2, 0, -0.3)):
+		_box(root, Vector3(-2, 0.005, -0.3), Vector3(3.2, 0.01, 2.2), Color(0.75, 0.32, 0.3))      # 地毯
 	if not _place_model(root, ["res://sofa.glb", "res://沙发.glb"], Vector3(-2, 0, -3.35)):
 		_box(root, Vector3(-2, 0.22, -3.35), Vector3(2.3, 0.44, 0.9), Color(0.35, 0.45, 0.6))          # 沙发
 		_box(root, Vector3(-2, 0.62, -3.72), Vector3(2.3, 0.36, 0.18), Color(0.33, 0.43, 0.58))
@@ -625,33 +669,50 @@ func _build_room(root: Node3D) -> void:
 	if not _place_model(root, ["res://armchair.glb", "res://单人沙发.glb"], Vector3(0.1, 0, -2.6)):   # 单人沙发
 		_box(root, Vector3(0.1, 0.2, -2.6), Vector3(0.8, 0.4, 0.8), Color(0.55, 0.6, 0.4))             # 单人沙发
 		_box(root, Vector3(0.1, 0.55, -2.95), Vector3(0.8, 0.3, 0.12), Color(0.5, 0.55, 0.36))
-	_box(root, Vector3(-4.5, 0.18, -3.5), Vector3(0.36, 0.36, 0.36), Color(0.75, 0.5, 0.35))       # 花盆
-	_box(root, Vector3(-4.5, 0.6, -3.5), Vector3(0.5, 0.5, 0.5), Color(0.3, 0.55, 0.3), false)
+	if not _place_model(root, ["res://plant.glb", "res://植物.glb"], Vector3(-4.5, 0, -3.5)):
+		_box(root, Vector3(-4.5, 0.18, -3.5), Vector3(0.36, 0.36, 0.36), Color(0.75, 0.5, 0.35))   # 花盆
+		_box(root, Vector3(-4.5, 0.6, -3.5), Vector3(0.5, 0.5, 0.5), Color(0.3, 0.55, 0.3), false)
 	var rng := RandomNumberGenerator.new()                                                         # 地上散落的积木（掩体）
 	rng.seed = 11
 	for i in 14:
 		var s := rng.randf_range(0.06, 0.16)
-		_box(root, Vector3(rng.randf_range(-4.5, 0.5), s / 2, rng.randf_range(-2.2, 3.2)), Vector3(s, s, s),
-			Color.from_hsv(rng.randf(), 0.6, 0.9), true, Basis(Vector3.UP, rng.randf() * PI))
+		var bp := Vector3(rng.randf_range(-4.5, 0.5), 0, rng.randf_range(-2.2, 3.2))
+		var by := rng.randf() * 180.0
+		if not _place_model(root, BLOCK_FILES[i % BLOCK_FILES.size()], bp, by):
+			_box(root, bp + Vector3(0, s / 2, 0), Vector3(s, s, s),
+				Color.from_hsv(rng.randf(), 0.6, 0.9), true, Basis(Vector3.UP, deg_to_rad(by)))
 	# 斜坡：书和尺子靠在家具上
-	_ramp(root, Vector3(-2.6, 0.0, -1.9), Vector3(-2.6, 0.44, -2.95), 0.25, Color(0.9, 0.8, 0.3))     # 地板 → 沙发
-	_ramp(root, Vector3(-2.0, 0.0, -0.1), Vector3(-2.0, 0.43, -0.9), 0.2, Color(0.3, 0.5, 0.85))      # 地板 → 茶几
-	_ramp(root, Vector3(0.1, 0.0, -1.35), Vector3(0.1, 0.4, -2.18), 0.2, Color(0.45, 0.75, 0.5))      # 地板 → 单人沙发
-	_ramp(root, Vector3(-2.0, 0.0, 2.6), Vector3(-2.0, 0.44, 3.55), 0.25, Color(0.85, 0.35, 0.35))     # 地板 → 电视柜
-	_ramp(root, Vector3(-3.8, 0.0, 0.5), Vector3(-4.55, 0.42, 0.5), 0.2, Color(0.95, 0.95, 0.9))      # 地板 → 书架第一层
+	_ramp(root, Vector3(-2.6, 0.0, -1.9), Vector3(-2.6, 0.44, -2.95), 0.25, Color(0.9, 0.8, 0.3), ["res://ramp_book_coral.glb", "res://坡道书_珊瑚.glb"])     # 地板 → 沙发
+	_ramp(root, Vector3(-2.0, 0.0, -0.1), Vector3(-2.0, 0.43, -0.9), 0.2, Color(0.3, 0.5, 0.85), ["res://ramp_ruler.glb", "res://坡道尺子.glb"])      # 地板 → 茶几
+	_ramp(root, Vector3(0.1, 0.0, -1.35), Vector3(0.1, 0.4, -2.18), 0.2, Color(0.45, 0.75, 0.5), ["res://ramp_book_mint.glb", "res://坡道书_薄荷.glb"])      # 地板 → 单人沙发
+	_ramp(root, Vector3(-2.0, 0.0, 2.6), Vector3(-2.0, 0.44, 3.55), 0.25, Color(0.85, 0.35, 0.35), ["res://ramp_book_lilac.glb", "res://坡道书_淡紫.glb"])     # 地板 → 电视柜
+	_ramp(root, Vector3(-3.8, 0.0, 0.5), Vector3(-4.55, 0.42, 0.5), 0.2, Color(0.95, 0.95, 0.9), ["res://ramp_book_coral.glb", "res://坡道书_珊瑚.glb"])      # 地板 → 书架第一层
 	# 厨房
-	_box(root, Vector3(4.7, 0.45, 0.6), Vector3(0.6, 0.9, 6.0), Color(0.95, 0.95, 0.95))            # 橱柜台面
-	_box(root, Vector3(4.6, 0.9, -3.5), Vector3(0.75, 1.8, 0.75), Color(0.85, 0.88, 0.9))            # 冰箱
-	_box(root, Vector3(3.0, 0.75, 0.0), Vector3(1.6, 0.04, 0.9), wood)                                # 餐桌
-	_legs(root, 3.0, 0.0, 1.6, 0.9, 0.73, 0.06, dark_wood)
+	var has_counter := _place_model(root, ["res://kitchen_counter.glb", "res://橱柜.glb"], Vector3(3.0, 0, 2.7), 180.0)   # L 形橱柜：长边靠南墙，短边靠隔墙
+	if not has_counter:
+		_box(root, Vector3(4.7, 0.45, 0.6), Vector3(0.6, 0.9, 6.0), Color(0.95, 0.95, 0.95))        # 橱柜台面
+	if not _place_model(root, ["res://fridge.glb", "res://冰箱.glb"], Vector3(4.6, 0, -3.62)):
+		_box(root, Vector3(4.6, 0.9, -3.5), Vector3(0.75, 1.8, 0.75), Color(0.85, 0.88, 0.9))        # 冰箱
+	if not _place_model(root, ["res://dining_table.glb", "res://餐桌.glb"], Vector3(3.0, 0, 0.0)):
+		_box(root, Vector3(3.0, 0.75, 0.0), Vector3(1.6, 0.04, 0.9), wood)                            # 餐桌
+		_legs(root, 3.0, 0.0, 1.6, 0.9, 0.73, 0.06, dark_wood)
+	var chairs := [["res://chair_coral.glb", "res://餐椅_珊瑚.glb"], ["res://chair_mint.glb", "res://餐椅_薄荷.glb"],
+		["res://chair_mustard.glb", "res://餐椅_芥末.glb"], ["res://chair_skyblue.glb", "res://餐椅_天蓝.glb"]]
+	var ci := 0
 	for cz in [-0.75, 0.75]:
 		for cx in [2.55, 3.45]:
-			_box(root, Vector3(cx, 0.45, cz), Vector3(0.42, 0.04, 0.42), wood)                         # 椅子
-			_legs(root, cx, cz, 0.42, 0.42, 0.43, 0.04, dark_wood)
-			_box(root, Vector3(cx, 0.7, cz + sign(cz) * 0.19), Vector3(0.42, 0.45, 0.04), wood)
-	_ramp(root, Vector3(2.55, 0.0, -1.7), Vector3(2.55, 0.47, -0.97), 0.22, Color(0.8, 0.65, 0.45))   # 砧板：地板 → 椅子
-	_ramp(root, Vector3(2.55, 0.47, -0.6), Vector3(2.55, 0.77, -0.2), 0.22, Color(0.8, 0.65, 0.45))   # 椅子 → 餐桌
-	_ramp(root, Vector3(2.4, 0.0, 2.6), Vector3(4.4, 0.9, 2.6), 0.25, Color(0.6, 0.4, 0.3))          # 擀面板：地板 → 台面
+			# 椅背朝外、面向餐桌（模型椅背在 -Z）
+			if not _place_model(root, chairs[ci], Vector3(cx, 0, cz), 0.0 if cz < 0 else 180.0):
+				_box(root, Vector3(cx, 0.45, cz), Vector3(0.42, 0.04, 0.42), wood)                     # 椅子
+				_legs(root, cx, cz, 0.42, 0.42, 0.43, 0.04, dark_wood)
+				_box(root, Vector3(cx, 0.7, cz + sign(cz) * 0.19), Vector3(0.42, 0.45, 0.04), wood)
+			ci += 1
+	_ramp(root, Vector3(1.5, 0.0, -0.75), Vector3(2.36, 0.45, -0.75), 0.22, Color(0.8, 0.65, 0.45), ["res://ramp_board_wood.glb", "res://坡道板_木头.glb"])    # 砧板：地板 → 椅子（从侧面上）
+	_ramp(root, Vector3(2.55, 0.45, -0.8), Vector3(2.55, 0.76, -0.42), 0.22, Color(0.8, 0.65, 0.45), ["res://ramp_board_mint.glb", "res://坡道板_薄荷.glb"])   # 椅子 → 餐桌
+	if has_counter:
+		_ramp(root, Vector3(3.6, 0.0, 1.3), Vector3(3.6, 0.9, 3.37), 0.25, Color(0.6, 0.4, 0.3), ["res://ramp_rolling.glb", "res://坡道擀面杖.glb"])   # 擀面板：地板 → 台面
+	else:
+		_ramp(root, Vector3(2.4, 0.0, 2.6), Vector3(4.4, 0.9, 2.6), 0.25, Color(0.6, 0.4, 0.3), ["res://ramp_rolling.glb", "res://坡道擀面杖.glb"])
 
 # ======================= 菜单 / 界面 =======================
 func _label(parent: Control, text: String, size: int, color := Color.WHITE) -> Label:
@@ -886,13 +947,19 @@ func _spawn_fighter(idx: int, is_player: bool) -> void:
 	f.model.add_child(f.gun_mesh)
 	# 纸巾降落伞
 	f.canopy = MeshInstance3D.new()
+	var chute = _visual_model(CHUTE_FILES)
 	var pm := BoxMesh.new()
 	pm.size = Vector3(1.4, 0.03, 1.4)
 	var pmat := StandardMaterial3D.new()
 	pmat.albedo_color = Color(0.98, 0.98, 0.96)
 	pm.material = pmat
-	f.canopy.mesh = pm
-	f.canopy.position = Vector3(0, 1.7, 0)
+	if chute:
+		f.canopy.add_child(chute)            # 纸巾伞模型：真实尺寸，底部是绳子挂点
+		chute.scale = Vector3.ONE / char_scale
+		f.canopy.position = Vector3(0, 0.8, 0)
+	else:
+		f.canopy.mesh = pm
+		f.canopy.position = Vector3(0, 1.7, 0)
 	f.canopy.visible = false
 	f.model.add_child(f.canopy)
 	f.label = Label3D.new()
@@ -988,7 +1055,32 @@ func _build_plane() -> void:
 	plane.look_at_from_position(plane_from, plane_to, Vector3.UP)
 	plane.rotate_object_local(Vector3.UP, PI)     # 机头朝 +Z 建的，转过来
 
+func _mesh_info(f: String) -> Variant:
+	var inst: Node3D = load(f).instantiate()
+	var mi := _find_mesh(inst)
+	var r: Variant = null
+	if mi:
+		var box := Transform3D(mi.transform.basis, Vector3.ZERO) * mi.get_aabb()
+		r = [mi.mesh, mi.transform.basis, max(box.size.z, 0.001)]
+	inst.free()
+	return r
+
+func gun_model(id: String) -> Variant:
+	if gun_models.has(id):
+		return gun_models[id]
+	if gun_src_mesh:
+		return [gun_src_mesh, gun_src_basis, gun_src_len]
+	return null
+
 func _load_gun_model() -> void:
+	if gun_models.is_empty():
+		for id in GUN_MODEL_FILES:
+			for f in GUN_MODEL_FILES[id]:
+				if ResourceLoader.exists(f):
+					var r = _mesh_info(f)
+					if r != null:
+						gun_models[id] = r
+					break
 	if gun_src_mesh:
 		return
 	for f in GUN_FILES:
@@ -1111,15 +1203,20 @@ func spawn_loot(pos: Vector3, id: String) -> void:
 	vis.name = "Vis"
 	n.add_child(vis)
 	if id == "bandage":
-		_box(vis, Vector3(0, 0.03, 0), Vector3(0.1, 0.015, 0.04), Color(0.95, 0.75, 0.6), false)
-		_box(vis, Vector3(0, 0.04, 0), Vector3(0.03, 0.017, 0.042), Color(1, 1, 1), false)
+		var bm = _visual_model(BANDAID_FILES)
+		if bm:
+			vis.add_child(bm)
+		else:
+			_box(vis, Vector3(0, 0.03, 0), Vector3(0.1, 0.015, 0.04), Color(0.95, 0.75, 0.6), false)
+			_box(vis, Vector3(0, 0.04, 0), Vector3(0.03, 0.017, 0.042), Color(1, 1, 1), false)
 	else:
 		var c: Color = WEAPONS[id].color
 		var L: float = GUN_LEN[id]
-		if gun_src_mesh:
+		var gmod: Variant = gun_model(id)
+		if gmod != null:
 			var gm := MeshInstance3D.new()
-			gm.mesh = gun_src_mesh
-			gm.transform = Transform3D(gun_src_basis.scaled(Vector3.ONE * (L / gun_src_len)), Vector3.ZERO)
+			gm.mesh = gmod[0]
+			gm.transform = Transform3D(gmod[1].scaled(Vector3.ONE * (L / gmod[2])), Vector3.ZERO)
 			vis.add_child(gm)
 		else:
 			_box(vis, Vector3(0, 0.05, 0), Vector3(0.035, 0.04, L), c, false)
