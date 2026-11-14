@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>模特大厅</title>
+	<style>html,body{color:#ece9f4;background:#050508;width:100%;height:100%;margin:0;padding:0;font-family:Microsoft YaHei,PingFang SC,Noto Sans CJK SC,system-ui,sans-serif;overflow:hidden}#app,#app canvas{display:block}#fps{z-index:50;color:#f4efe2;pointer-events:none;background:#0006;border-radius:5px;padding:4px 8px;font:12px/1.2 ui-monospace,Consolas,monospace;position:fixed;top:10px;left:12px}#loader{z-index:100;background:#050505;flex-direction:column;justify-content:center;align-items:center;transition:opacity .7s;display:flex;position:fixed;inset:0}#loader.out{opacity:0;pointer-events:none}#loader h1{letter-spacing:.6em;color:#8a8784;margin:0 0 28px .6em;font-size:42px;font-weight:300}#track{background:#ffffff1f;border-radius:2px;width:min(420px,70vw);height:3px;overflow:hidden}#bar{background:linear-gradient(90deg,#7a5cff,#3fd8ff);width:0;height:100%}#status{opacity:.75;color:#3b3a38;text-align:center;max-width:80vw;min-height:1.2em;margin-top:14px;font-size:13px}#status.err{color:#ffb4a0;opacity:1}#note{opacity:.45;color:#3b3a38;font-size:12px;position:absolute;bottom:28px}#whiteout{z-index:200;opacity:0;pointer-events:none;background:#fff;transition:opacity .85s ease-in;position:fixed;inset:0}#whiteout.on{opacity:1}#overlay{z-index:60;cursor:pointer;background:#06060c52;justify-content:center;align-items:center;display:none;position:fixed;inset:0}#overlay.on{display:flex}#overlay .card{text-align:center;-webkit-backdrop-filter:blur(6px);background:#0a0a1280;border-radius:10px;padding:22px 30px;font-size:14px;line-height:1.9}#overlay .go{letter-spacing:.2em;color:#dcd6ff;margin-bottom:8px;font-size:18px}kbd{border:1px solid #ffffff59;border-radius:4px;margin:0 2px;padding:0 5px;font-family:inherit}body.fromDoor #loader{background:#fff}body.fromDoor #loader h1,body.fromDoor #status,body.fromDoor #note{visibility:hidden}body.fromDoor #track{background:#0000000f}body.fromDoor #bar{background:#0000002e}body.fromDoor #status.err{visibility:visible;color:#a33}#loader .loadShot{object-fit:cover;opacity:0;width:100%;height:100%;transition:opacity .9s ease-out;position:absolute;inset:0}#loader .loadShot.on{opacity:1}body.hasShot #loader h1,body.hasShot #loader #status,body.hasShot #loader #note{visibility:hidden}body.hasShot #loader #status.err{visibility:visible;color:#fff;background:#781414b3;border-radius:4px;padding:6px 10px;position:relative}body.hasShot #track{background:#ffffff2e;width:min(360px,50vw);height:2px;position:absolute;bottom:7vh;left:50%;transform:translate(-50%)}body.hasShot #bar{background:#ffffffbf}</style>
+  <script type="module" crossorigin src="../assets/level3-BqTaPs-2.js"></script>
+  <link rel="modulepreload" crossorigin href="../assets/LoadShot-6GiQl15a.js">
+  <link rel="modulepreload" crossorigin href="../assets/Mipmaps-BOD7d-pb.js">
+</head>
+<body>
+	<div id="app"></div>
+	<div id="whiteout"></div>
+	<script>if ( /[?&]door\b/.test( location.search ) ) document.body.classList.add( "fromDoor" );</script>
+	<div id="fps" style="display: none">-- fps</div>
+	<div id="loader">
+		<h1>模特大厅</h1>
+		<div id="track"><div id="bar"></div></div>
+		<div id="status">载入中…</div>
+		<div id="note">第一次打开要编译着色器，可能需要一两分钟</div>
+	</div>
+	<div id="overlay">
+		<div class="card">
+			<div class="go">点击进入</div>
+			<div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 走 · <kbd>Shift</kbd> 跑 · <kbd>空格</kbd> 跳 · <kbd>F</kbd> 手电 · <kbd>Esc</kbd> 释放鼠标</div>
+		</div>
+	</div>
+	<script>globalThis.HARK_ASSET_BASE = '../';</script>
+</body>
+</html>
